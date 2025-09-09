@@ -1,0 +1,17 @@
+{
+  "name": "change-srt-type-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/main"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "chardet": "^2.1.0",
+    "pino": "^9.9.4",
+    "pino-pretty": "^13.1.1"
+  }
+}
