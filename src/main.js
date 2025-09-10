@@ -19,56 +19,68 @@ function hasBom(filePath) {
 }
 
 async function changeSrtEncoding(movie, filePath) {
-    const files = readdirSync(filePath);
-    for (const file of files) {
-        const currentType = await chardet.detectFile(`${filePath}/${file}`);
+    const srtFiles = readdirSync(filePath);
+    for (const srtFile of srtFiles) {
+        const fullPath = path.join(filePath, srtFile);
+        const currentType = await chardet.detectFile(fullPath);
 
-        if (hasBom(`${filePath}/${file}`)) {
+        if (hasBom(fullPath)) {
             logger.warn(`⚠️ La película ${movie} tiene srt: ${currentType} con BOM, pasando a la siguiente...`);
 
         } else {
             logger.info(`📝 La película ${movie} tiene srt: ${currentType}, cambiando a UTF-8 con BOM...`);
-            const content = readFileSync(`${filePath}/${file}`, "latin1");
+            const content = readFileSync(fullPath, "latin1");
             const utf8WithBom = "\uFEFF" + content;
-            writeFileSync(`${filePath}/${file}`, utf8WithBom, "utf8");
+            writeFileSync(fullPath, utf8WithBom, "utf8");
         }
     }
 }
 
+async function processMovies(movies) {
+    for (const movie of movies) {
+        const srtPath = path.join(baseFolder, movie, "subs");
+        const haveSubsFolder = existsSync(srtPath);
+
+        if (!haveSubsFolder) {
+            logger.error(`🚫 ${movie} no tiene carpeta subs${movies.length > 1 ? ", pasando a la siguiente..." : "."}`);
+            continue;
+        }
+
+        await changeSrtEncoding(movie, srtPath);
+    }
+    logger.info("✅ Proceso terminado");
+}
+
+function ask(question) {
+    return new Promise(resolve => rl.question(question, resolve));
+}
+
 async function main() {
     const movies = readdirSync(baseFolder)
-    rl.question("🎬 ¿Qué película quieres transformar? (ENTER = todas): ", async (input) => {
-        const searchTerm = input.trim().toLowerCase();
-        let targetMovies = movies;
 
-        if (searchTerm) {
-            targetMovies = movies.filter(m => m.toLowerCase().includes(searchTerm));
-            if (targetMovies.length === 0) {
-                logger.error(`❌ No se encontró ninguna película que contenga: "${searchTerm}"`);
-                rl.close();
-                return;
-            }
+    const input = await ask("🎬 ¿Qué película quieres transformar? (ENTER = todas): ");
+    const searchTerm = input.trim().toLowerCase();
+    let targetMovies = movies;
+
+    if (searchTerm) {
+        targetMovies = movies.filter(m => m.toLowerCase().includes(searchTerm));
+        if (targetMovies.length === 0) {
+            logger.error(`❌ No se encontró ninguna película que contenga: "${searchTerm}"`);
+            rl.close();
+            return;
         }
+    }
 
-        if (!searchTerm) {
-            logger.info(`🎬 Procesando ${targetMovies.length} películas...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-
-        for (const movie of targetMovies) {
-            const srtPath = path.join(baseFolder, movie, "srt");
-            const haveSrtFolder = existsSync(srtPath);
-
-            if (!haveSrtFolder) {
-                logger.error(`🚫 La ${movie} no tiene carpeta srt${targetMovies.length === 1 ? "." : ", pasando a la siguiente..."}`);
-                continue;
-            }
-
-            await changeSrtEncoding(movie, srtPath);
-        }
-        logger.info("✅ Proceso terminado");
-        rl.close();
-    })
+    const movieLength = targetMovies.length;
+    const proceed = await ask(`${movieLength} ${movieLength === 1 ? "película encontrada" : "películas encontradas"}. ¿Quiere proceder? (s/n): `);
+    const sanitizedAnswer = proceed.trim().toLowerCase();
+    if (["si", "s", "yes", "y"].includes(sanitizedAnswer)) {
+        await processMovies(targetMovies);
+    } else {
+        logger.info("🚪 Saliendo...");
+    }
+    rl.close();
 }
 
 main();
+
